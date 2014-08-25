@@ -350,6 +350,83 @@ static inline CGSize CTFramesetterSuggestFrameSizeForAttributedStringWithConstra
 }
 #endif
 
+- (void)handleTap:(UITapGestureRecognizer *)tap {
+  switch (tap.state) {
+    case UIGestureRecognizerStateBegan: {
+      self.activeLink = [self linkAtPoint:[tap locationInView:self]];
+    }
+      NSLog(@"begin");
+      break;
+    case UIGestureRecognizerStateEnded: {
+      if (self.activeLink) {
+        NSTextCheckingResult *result = self.activeLink;
+        self.activeLink = nil;
+
+        switch (result.resultType) {
+          case NSTextCheckingTypeLink:
+            if ([self.delegate respondsToSelector:@selector(attributedLabel:didSelectLinkWithURL:)]) {
+              [self.delegate attributedLabel:self didSelectLinkWithURL:result.URL];
+              return;
+            }
+            break;
+          case NSTextCheckingTypeAddress:
+            if ([self.delegate respondsToSelector:@selector(attributedLabel:didSelectLinkWithAddress:)]) {
+              [self.delegate attributedLabel:self didSelectLinkWithAddress:result.addressComponents];
+              return;
+            }
+            break;
+          case NSTextCheckingTypePhoneNumber:
+            if ([self.delegate respondsToSelector:@selector(attributedLabel:didSelectLinkWithPhoneNumber:)]) {
+              [self.delegate attributedLabel:self didSelectLinkWithPhoneNumber:result.phoneNumber];
+              return;
+            }
+            break;
+          case NSTextCheckingTypeDate:
+            if (result.timeZone && [self.delegate respondsToSelector:@selector(attributedLabel:didSelectLinkWithDate:timeZone:duration:)]) {
+              [self.delegate attributedLabel:self didSelectLinkWithDate:result.date timeZone:result.timeZone duration:result.duration];
+              return;
+            } else if ([self.delegate respondsToSelector:@selector(attributedLabel:didSelectLinkWithDate:)]) {
+              [self.delegate attributedLabel:self didSelectLinkWithDate:result.date];
+              return;
+            }
+            break;
+          case NSTextCheckingTypeTransitInformation:
+            if ([self.delegate respondsToSelector:@selector(attributedLabel:didSelectLinkWithTransitInformation:)]) {
+              [self.delegate attributedLabel:self didSelectLinkWithTransitInformation:result.components];
+              return;
+            }
+          default:
+            break;
+        }
+
+        // Fallback to `attributedLabel:didSelectLinkWithTextCheckingResult:` if no other delegate method matched.
+        if ([self.delegate respondsToSelector:@selector(attributedLabel:didSelectLinkWithTextCheckingResult:)]) {
+          [self.delegate attributedLabel:self didSelectLinkWithTextCheckingResult:result];
+        }
+      }
+    }
+      NSLog(@"end");
+      break;
+    case UIGestureRecognizerStateChanged: {
+      if (self.activeLink) {
+        if (self.activeLink != [self linkAtPoint:[tap locationInView:self]]) {
+          self.activeLink = nil;
+        }
+      }
+      break;
+    }
+    case UIGestureRecognizerStateFailed:
+    case UIGestureRecognizerStateCancelled:
+      if (self.activeLink) {
+        self.activeLink = nil;
+      }
+      NSLog(@"failed");
+      break;
+    default:
+      break;
+  }
+}
+
 - (instancetype)initWithFrame:(CGRect)frame {
     self = [super initWithFrame:frame];
     if (!self) {
@@ -365,6 +442,7 @@ static inline CGSize CTFramesetterSuggestFrameSizeForAttributedStringWithConstra
     self.userInteractionEnabled = YES;
     self.multipleTouchEnabled = NO;
 
+  [self addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)]];
     self.textInsets = UIEdgeInsetsZero;
     self.lineHeightMultiple = 1.0f;
 
@@ -1393,6 +1471,19 @@ afterInheritingLabelAttributesAndConfiguringWithBlock:(NSMutableAttributedString
 }
 #endif
 
+- (void)touchesBegan:(NSSet *)touches
+           withEvent:(UIEvent *)event
+{
+  UITouch *touch = [touches anyObject];
+
+  self.activeLink = [self linkAtPoint:[touch locationInView:self]];
+  NSLog(@"touchesBegan %@", self.activeLink);
+  if (!self.activeLink) {
+    [super touchesBegan:touches withEvent:event];
+  }
+}
+
+#if 0
 - (UIView *)hitTest:(CGPoint)point
           withEvent:(UIEvent *)event
 {
@@ -1421,7 +1512,7 @@ afterInheritingLabelAttributesAndConfiguringWithBlock:(NSMutableAttributedString
     UITouch *touch = [touches anyObject];
 
     self.activeLink = [self linkAtPoint:[touch locationInView:self]];
-
+  NSLog(@"touchesBegan %@", self.activeLink);
     if (!self.activeLink) {
         [super touchesBegan:touches withEvent:event];
     }
@@ -1444,6 +1535,7 @@ afterInheritingLabelAttributesAndConfiguringWithBlock:(NSMutableAttributedString
 - (void)touchesEnded:(NSSet *)touches
            withEvent:(UIEvent *)event
 {
+  NSLog(@"touchesBegan %@", self.activeLink);
     if (self.activeLink) {
         NSTextCheckingResult *result = self.activeLink;
         self.activeLink = nil;
@@ -1497,6 +1589,7 @@ afterInheritingLabelAttributesAndConfiguringWithBlock:(NSMutableAttributedString
 - (void)touchesCancelled:(NSSet *)touches
                withEvent:(UIEvent *)event
 {
+  NSLog(@"touchesCancelled %@", self.activeLink);
     if (self.activeLink) {
         self.activeLink = nil;
     } else {
@@ -1504,6 +1597,7 @@ afterInheritingLabelAttributesAndConfiguringWithBlock:(NSMutableAttributedString
     }
 }
 
+#endif
 #pragma mark - UIResponderStandardEditActions
 
 - (void)copy:(__unused id)sender {
